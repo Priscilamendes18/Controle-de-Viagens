@@ -2,6 +2,7 @@
 
 package com.example.controledeviagens
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,21 +23,34 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.navigation.NavController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import kotlinx.coroutines.launch
 import java.util.Locale
+
+val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "preferencias")
+val NOME_USUARIO = stringPreferencesKey("nome_usuario")
 
 // Classe que representa uma viagem
 class Viagem(
@@ -133,7 +147,7 @@ fun ControleViagensApp() {
                         ) {
                             mensagem = "Preencha todos os campos corretamente."
                         } else if (
-                            inicial < 0 ||
+                            inicial < 0.0 ||
                             final < inicial ||
                             qtdLitros <= 0 ||
                             precoLitro < 0 ||
@@ -169,6 +183,74 @@ fun ControleViagensApp() {
                     navController = navController
                 )
             }
+
+            // Rota 3: Meu Perfil (Exercício DataStore exato)
+            composable("perfil") {
+                MeuPerfil(navController = navController)
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// TELA MEU PERFIL (Exatamente como no exercício)
+// -------------------------------------------------------------
+@Composable
+fun MeuPerfil(navController: NavController) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var nome by remember { mutableStateOf("") }
+
+    val nomeSalvo by produceState(initialValue = "") {
+        context.dataStore.data.collect { preferences ->
+            value = preferences[NOME_USUARIO] ?: ""
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "Meu Perfil",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        TextField(
+            value = nome,
+            onValueChange = {
+                nome = it
+            },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Button(
+            onClick = {
+                scope.launch {
+                    context.dataStore.edit { preferences ->
+                        preferences[NOME_USUARIO] = nome
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Salvar")
+        }
+
+        Text(
+            text = "Nome salvo: $nomeSalvo",
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        OutlinedButton(
+            onClick = { navController.navigateUp() },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Voltar")
         }
     }
 }
@@ -197,6 +279,14 @@ fun TelaListaViagens(
             text = "Controle de Viagens",
             style = MaterialTheme.typography.headlineMedium
         )
+
+        // Botão para acessar a tela Meu Perfil
+        Button(
+            onClick = { navController.navigate("perfil") },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Meu Perfil")
+        }
 
         // Botão para ir à tela de cadastro
         Button(
@@ -320,7 +410,7 @@ fun TelaCadastroViagem(
         OutlinedTextField(
             value = kmFinal,
             onValueChange = onKmFinalChange,
-            label = { Text("Quilometragem final") },
+            label = { Text("Quilometragem fiário/final") },
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true
@@ -395,7 +485,6 @@ fun String.toDoubleOrNullBR(): Double? {
 fun Double.formatarBR(): String {
     return String.format(Locale("pt", "BR"), "%.2f", this)
 }
-
 fun Double.formatarMoeda(): String {
     return "R$ ${this.formatarBR()}"
 }
