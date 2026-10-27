@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -52,8 +51,9 @@ import java.util.Locale
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "preferencias")
 val NOME_USUARIO = stringPreferencesKey("nome_usuario")
 
-// Classe que representa uma viagem
+// Classe que representa uma viagem (com id para o SQLite)
 class Viagem(
+    val id: Int = 0,
     val data: String,
     val kmInicial: Double,
     val kmFinal: Double,
@@ -71,9 +71,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val repository = ViagemRepository(applicationContext)
+
         setContent {
             MaterialTheme {
-                ControleViagensApp()
+                ControleViagensApp(repository)
             }
         }
     }
@@ -81,11 +84,11 @@ class MainActivity : ComponentActivity() {
 
 // Composable container que gerencia o estado e as rotas
 @Composable
-fun ControleViagensApp() {
+fun ControleViagensApp(repository: ViagemRepository) {
     val navController = rememberNavController()
 
-    // Lista de viagens mantida no nível superior
-    val viagens = remember { mutableStateListOf<Viagem>() }
+    // Lista de viagens carregada do SQLite
+    var viagens by remember { mutableStateOf(repository.listar()) }
 
     // Estados do formulário
     var data by remember { mutableStateOf("") }
@@ -155,7 +158,7 @@ fun ControleViagensApp() {
                         ) {
                             mensagem = "Confira os valores informados."
                         } else {
-                            val viagem = Viagem(
+                            val sucesso = repository.inserir(
                                 data = data,
                                 kmInicial = inicial,
                                 kmFinal = final,
@@ -164,27 +167,33 @@ fun ControleViagensApp() {
                                 valorLitro = precoLitro,
                                 pedagio = valorPedagio
                             )
-                            viagens.add(viagem)
 
-                            // Limpa os campos
-                            data = ""
-                            kmInicial = ""
-                            kmFinal = ""
-                            litros = ""
-                            combustivel = ""
-                            valorLitro = ""
-                            pedagio = ""
-                            mensagem = ""
+                            if (sucesso) {
+                                // Atualiza a lista com os dados do SQLite
+                                viagens = repository.listar()
 
-                            // Retorna à lista
-                            navController.navigateUp()
+                                // Limpa os campos
+                                data = ""
+                                kmInicial = ""
+                                kmFinal = ""
+                                litros = ""
+                                combustivel = ""
+                                valorLitro = ""
+                                pedagio = ""
+                                mensagem = ""
+
+                                // Retorna à lista
+                                navController.navigateUp()
+                            } else {
+                                mensagem = "Erro ao salvar no banco de dados."
+                            }
                         }
                     },
                     navController = navController
                 )
             }
 
-            // Rota 3: Meu Perfil (Exercício DataStore exato)
+            // Rota 3: Meu Perfil (DataStore)
             composable("perfil") {
                 MeuPerfil(navController = navController)
             }
@@ -193,7 +202,7 @@ fun ControleViagensApp() {
 }
 
 // -------------------------------------------------------------
-// TELA MEU PERFIL (Exatamente como no exercício)
+// TELA MEU PERFIL (DataStore)
 // -------------------------------------------------------------
 @Composable
 fun MeuPerfil(navController: NavController) {
@@ -280,7 +289,7 @@ fun TelaListaViagens(
             style = MaterialTheme.typography.headlineMedium
         )
 
-        // Botão para acessar a tela Meu Perfil
+        // Botão para acessar o Meu Perfil
         Button(
             onClick = { navController.navigate("perfil") },
             modifier = Modifier.fillMaxWidth()
@@ -410,7 +419,7 @@ fun TelaCadastroViagem(
         OutlinedTextField(
             value = kmFinal,
             onValueChange = onKmFinalChange,
-            label = { Text("Quilometragem fiário/final") },
+            label = { Text("Quilometragem final") },
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             singleLine = true
@@ -485,6 +494,7 @@ fun String.toDoubleOrNullBR(): Double? {
 fun Double.formatarBR(): String {
     return String.format(Locale("pt", "BR"), "%.2f", this)
 }
+
 fun Double.formatarMoeda(): String {
     return "R$ ${this.formatarBR()}"
 }
@@ -493,6 +503,6 @@ fun Double.formatarMoeda(): String {
 @Composable
 fun PreviewControleViagens() {
     MaterialTheme {
-        ControleViagensApp()
+        ControleViagensApp(ViagemRepository(LocalContext.current))
     }
 }
